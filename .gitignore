@@ -1,0 +1,70 @@
+# Python虚拟环境
+.venv/
+venv/
+ENV/
+env/
+
+# Python编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 分发/打包
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.wpr
+*.wpu
+.vs/
+x64/
+
+# 临时文件
+*.local
+*.log
+*.tmp
+*.bak
+*.cache
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# vn.py特定文件
+.vntrader/
+
+# Visual Studio中间文件
+*.exp
+*.iobj
+*.ipdb
+*.pdb
+
+# 文档构建
+_build/
+_sstatic/
+_templates/
+
+# 测试覆盖率
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 环境变量文件
+.env
+.env.local
+
