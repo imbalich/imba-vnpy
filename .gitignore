@@ -47,6 +47,7 @@ desktop.ini
 
 # vn.py特定文件
 .vntrader/
+vnpy/
 
 # Visual Studio中间文件
 *.exp
