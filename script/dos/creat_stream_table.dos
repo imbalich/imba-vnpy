@@ -1,0 +1,49 @@
+// ============================================
+// DolphinDB 流表创建脚本
+// 用于实时数据写入和订阅
+// ============================================
+
+// 1. 删除已存在的流表（如果存在）
+if(existsTable("dfs://", "tick_stream")) {
+    dropStreamTable(`tick_stream)
+}
+
+// 2. 定义流表结构（与分区表结构一致，包括延迟字段）
+colNames = `symbol`exchange`trade_date`datetime`name`last_price`open_price`high_price`low_price`pre_close`limit_up`limit_down`volume`last_volume`open_interest`bid_price_1`bid_volume_1`ask_price_1`ask_volume_1`gateway_name`receive_timestamp`write_start_timestamp`write_end_timestamp
+colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING, TIMESTAMP, TIMESTAMP, TIMESTAMP]
+
+// 3. 创建流表（内存表）
+tick_stream = streamTable(1:0, colNames, colTypes)
+
+// 4. 启用流表共享和持久化
+// 参数说明：
+// - table: 流表对象
+// - tableName: 共享表名（供其他会话访问）
+// - cacheSize: 缓存大小（行数）
+// - preCache: 预缓存大小
+enableTableShareAndPersistence(table=tick_stream, tableName=`tick_stream, cacheSize=1000000, preCache=0)
+
+// 5. 配置自动持久化到分区表（可选）
+// 创建订阅任务：流表 → 分区表
+def saveToPartitionedTable(mutable t) {
+    db = database("dfs://vnpy_futures")
+    tick_table = loadTable("dfs://vnpy_futures", "tick_data")
+    tick_table.append!(t)
+}
+
+// 订阅流表，自动保存到分区表
+// 参数说明：
+// - tableName: 流表名
+// - actionName: 订阅任务名
+// - offset: 订阅位置（-1表示从最新开始）
+// - handler: 处理函数
+// - msgAsTable: 消息格式为表
+// - batchSize: 批量大小（100条）
+// - throttle: 节流时间（秒，0.1表示100ms）
+subscribeTable(tableName=`tick_stream, actionName=`save_to_partitioned_table, offset=-1, handler=saveToPartitionedTable, msgAsTable=true, batchSize=100, throttle=0.1)
+
+// 6. 输出创建成功信息
+print("✓ 流表创建成功: tick_stream")
+print("✓ 流表已启用共享和持久化")
+print("✓ 已配置自动持久化到分区表")
+print("✓ 延迟分析字段已添加: receive_timestamp, write_start_timestamp, write_end_timestamp")

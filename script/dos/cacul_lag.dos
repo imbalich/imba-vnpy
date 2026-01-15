@@ -1,0 +1,12 @@
+// 在DolphinDB中查询延迟统计
+select 
+    symbol,
+    datetime,
+    receive_timestamp - datetime as receive_delay,           // 接收延迟（从tick时间到接收时间）
+    write_start_timestamp - receive_timestamp as queue_delay, // 队列延迟（从接收到开始写入）
+    write_end_timestamp - write_start_timestamp as write_delay, // 写入延迟（写入耗时）
+    write_end_timestamp - receive_timestamp as total_delay     // 总延迟（从接收到写入完成）
+from tick_stream
+where symbol='IM2603'
+order by datetime desc
+limit 100
