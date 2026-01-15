@@ -1,0 +1,40 @@
+// ============================================
+// DolphinDB 期货快照数据建库脚本
+// 分区策略：按天分区 + 按期货代码HASH10分区
+// 引擎：TSDB（时序数据库）
+// ============================================
+
+// drop table [if exists] schema
+
+// 1. 删除已存在的数据库（如果存在）
+if(existsDatabase("dfs://vnpy_futures")) {
+    dropDatabase("dfs://vnpy_futures")
+}
+
+// 2. 创建数据库（两层分区）
+// 第一层：按交易日期分区（VALUE分区）
+// 第二层：按期货代码HASH10分区
+dbDate = database("", VALUE, 2026.01.01..2026.03.01)  // 按天分区
+dbSymbol = database("", HASH, [SYMBOL, 10])            // 按期货代码HASH10分区
+
+// 组合分区数据库（TSDB引擎）
+db = database("dfs://vnpy_futures", COMPO, [dbDate, dbSymbol], engine="TSDB")
+
+// 3. 定义表结构（期货快照数据 - 仅保留1档数据）
+// 按照官方示例：使用 table(1:0, colNames, colTypes) 创建空表结构
+colNames = `symbol`exchange`trade_date`datetime`name`last_price`open_price`high_price`low_price`pre_close`limit_up`limit_down`volume`last_volume`open_interest`bid_price_1`bid_volume_1`ask_price_1`ask_volume_1`gateway_name
+colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING]
+t = table(1:0, colNames, colTypes)
+
+// 4. 创建分区表
+// 按照官方示例：db.createPartitionedTable(t, `tableName, `partitionColumns)
+// TSDB引擎可以添加sortColumns和keepDuplicates参数
+tick_table = db.createPartitionedTable(t, `tick_data, `trade_date`symbol, sortColumns=`symbol`datetime, keepDuplicates=ALL)
+
+// 5. 输出创建成功信息
+print("✓ 数据库创建成功: dfs://vnpy_futures")
+print("✓ 表创建成功: tick_data")
+print("✓ 分区策略: 按天分区 + 按期货代码HASH10分区")
+print("✓ 引擎: TSDB")
+print("✓ 分区键: trade_date + symbol")
+print("✓ 排序键: symbol + datetime")

@@ -1,13 +1,9 @@
 from vnpy.event import EventEngine
 from vnpy.trader.engine import MainEngine
 from vnpy.trader.ui import MainWindow, create_qapp
-
-from myvnpy.gateway.ctp.ctp_gateway import FixedCtpGateway
+from vnpy.gateway.ctp import CtpGateway
 from vnpy.app.cta_strategy import CtaStrategyApp
 from vnpy.app.cta_backtester import CtaBacktesterApp
-
-
-from myvnpy.app.data_recorder.tick_collector_engine import TickCollectorEngine
 
 def main():
     """Start VN Trader"""
@@ -16,13 +12,10 @@ def main():
     event_engine = EventEngine()
     main_engine = MainEngine(event_engine)
     
-    main_engine.add_gateway(FixedCtpGateway)
+    main_engine.add_gateway(CtpGateway)
     main_engine.add_app(CtaStrategyApp)
     main_engine.add_app(CtaBacktesterApp)
 
-    # 添加你的数据采集引擎（关键！）
-    collector_engine = main_engine.add_engine(TickCollectorEngine)
-    
     main_window = MainWindow(main_engine, event_engine)
     main_window.showMaximized()
 
