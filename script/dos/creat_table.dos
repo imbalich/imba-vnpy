@@ -23,7 +23,7 @@ db = database("dfs://vnpy_futures", COMPO, [dbDate, dbSymbol], engine="TSDB")
 // 3. 定义表结构（期货快照数据 - 仅保留1档数据 + 延迟分析字段）
 // 按照官方示例：使用 table(1:0, colNames, colTypes) 创建空表结构
 colNames = `symbol`exchange`trade_date`datetime`name`last_price`open_price`high_price`low_price`pre_close`limit_up`limit_down`volume`last_volume`open_interest`bid_price_1`bid_volume_1`ask_price_1`ask_volume_1`gateway_name`receive_timestamp`write_start_timestamp`write_end_timestamp
-colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING, TIMESTAMP, TIMESTAMP, TIMESTAMP]
+colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING, NANOTIMESTAMP, NANOTIMESTAMP, NANOTIMESTAMP]
 t = table(1:0, colNames, colTypes)
 
 // 4. 创建分区表
