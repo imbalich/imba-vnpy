@@ -106,8 +106,13 @@ class StreamTableWriter:
 
             # 使用run方法执行tableInsert（同步写入，高频场景优化）
             # 将DataFrame上传到DolphinDB，然后执行tableInsert
-            # 注意：需要使用temporalParse转换datetime字符串为TIMESTAMP类型
+            # 注意：在tableInsert执行前记录write_end_timestamp，反映实际写入时刻
             self.session.session.upload({"tick_data": df})
+
+            # 记录写入结束时间戳（关键时间点3：tableInsert执行前一刻，纳秒级精度）
+            # 这样记录的是最接近实际写入流表的时间
+            write_end_timestamp_ns = get_nanosecond_timestamp()
+
             script = f"""
             tableInsert({self.stream_table_name},
                 tick_data.symbol[0],
@@ -132,7 +137,7 @@ class StreamTableWriter:
                 tick_data.gateway_name[0],
                 nanotimestamp(tick_data.receive_timestamp[0]),
                 nanotimestamp(tick_data.write_start_timestamp[0]),
-                NULL
+                nanotimestamp({write_end_timestamp_ns})
             )
             """
             self.session.run(script)

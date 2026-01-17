@@ -1,14 +1,7 @@
-// 在DolphinDB中查询延迟统计
-// 将所有时间戳转换为毫秒级时间戳，然后计算延迟
+// 简化的延迟统计查询（只显示延迟信息）
 select
     symbol,
     datetime,
-
-    // 时间戳转换为毫秒（便于计算）
-    long(nanotimestamp(datetime) / 1000000) as datetime_ms,
-    long(receive_timestamp / 1000000) as receive_ms,
-    long(write_start_timestamp / 1000000) as write_start_ms,
-    long(write_end_timestamp / 1000000) as write_end_ms,
 
     // 延迟计算（毫秒）
     (long(receive_timestamp / 1000000) - long(nanotimestamp(datetime) / 1000000)) as receive_delay_ms,
@@ -19,4 +12,4 @@ select
 from tick_stream
 where symbol='IM2603'
 order by datetime desc
-limit 100
+limit 20

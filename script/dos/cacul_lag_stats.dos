@@ -1,0 +1,25 @@
+// 延迟统计聚合分析
+select
+    symbol,
+    count(*) as total_count,
+
+    // 接收延迟统计
+    avg(long(receive_timestamp / 1000000) - long(nanotimestamp(datetime) / 1000000)) as avg_receive_delay_ms,
+    max(long(receive_timestamp / 1000000) - long(nanotimestamp(datetime) / 1000000)) as max_receive_delay_ms,
+    min(long(receive_timestamp / 1000000) - long(nanotimestamp(datetime) / 1000000)) as min_receive_delay_ms,
+
+    // 队列延迟统计
+    avg(long(write_start_timestamp / 1000000) - long(receive_timestamp / 1000000)) as avg_queue_delay_ms,
+    max(long(write_start_timestamp / 1000000) - long(receive_timestamp / 1000000)) as max_queue_delay_ms,
+
+    // 写入延迟统计
+    avg(long(write_end_timestamp / 1000000) - long(write_start_timestamp / 1000000)) as avg_write_delay_ms,
+    max(long(write_end_timestamp / 1000000) - long(write_start_timestamp / 1000000)) as max_write_delay_ms,
+
+    // 总延迟统计
+    avg(long(write_end_timestamp / 1000000) - long(receive_timestamp / 1000000)) as avg_total_delay_ms,
+    max(long(write_end_timestamp / 1000000) - long(receive_timestamp / 1000000)) as max_total_delay_ms
+
+from tick_stream
+where symbol='IM2603'
+group by symbol

@@ -83,7 +83,7 @@ def main():
         writer=writer,              # 如果db_session为None，writer也为None，则只采集不写入
         filter_config=filter_config,
         enable_statistics=True,     # 启用统计功能
-        debug=True                  # 启用调试模式（打印详细信息）
+        debug=False                 # 关闭调试模式（生产环境）
     )
     
     # 手动注册引擎到main_engine（这样main_engine可以管理它）

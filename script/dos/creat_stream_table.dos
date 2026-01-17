@@ -3,9 +3,52 @@
 // 用于实时数据写入和订阅
 // ============================================
 
-// 1. 正确检查并删除已存在的流表（如果存在）
-if(existsStreamTable(`tick_stream)) {
-    dropStreamTable(`tick_stream)
+// 1. 彻底清理所有相关对象和变量
+// 取消所有可能的订阅
+try {
+    unsubscribeTable(tableName=`tick_stream, actionName=`save_to_partitioned_table)
+    print("已取消 tick_stream 的订阅")
+} catch(ex) {
+    print("取消订阅失败（可能不存在）: " + string(ex))
+}
+
+try {
+    unsubscribeTable(tableName=`tick_stream_backup, actionName=`save_to_partitioned_table)
+    print("已取消 tick_stream_backup 的订阅")
+} catch(ex) {
+    // 忽略错误
+}
+
+// 删除所有可能的流表
+try {
+    if(existsStreamTable(`tick_stream)) {
+        dropStreamTable(`tick_stream)
+        print("已删除流表 tick_stream")
+    }
+} catch(ex) {
+    print("删除 tick_stream 失败: " + string(ex))
+}
+
+try {
+    if(existsStreamTable(`tick_stream_backup)) {
+        dropStreamTable(`tick_stream_backup)
+        print("已删除流表 tick_stream_backup")
+    }
+} catch(ex) {
+    // 忽略错误
+}
+
+// 清理内存中的变量
+variable_names = [`tick_stream, `tick_stream_backup, `tick_stream_name]
+for(var_name in variable_names) {
+    try {
+        if(exists(var_name)) {
+            undef(var_name)
+            print("已清理变量: " + string(var_name))
+        }
+    } catch(ex) {
+        // 忽略清理错误
+    }
 }
 
 // 2. 定义流表结构（与分区表结构一致，包括延迟字段）
@@ -14,12 +57,28 @@ colNames = `symbol`exchange`trade_date`datetime`name`last_price`open_price`high_
 colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING, NANOTIMESTAMP, NANOTIMESTAMP, NANOTIMESTAMP]
 
 // 3. 创建流表（预分配足够内存，100万行）
+// 注意：DolphinDB流表不支持默认值，write_end_timestamp由Python代码提供
 tick_stream = streamTable(1000000:0, colNames, colTypes)
 
-// 4. 启用流表共享 - 两种方案选择其一
+// 4. 启用流表共享
+// 注意：确保变量名没有冲突
+tick_stream_name = "tick_stream"  // 默认流表名
 
-// 方案A：仅共享（推荐，简单可靠）
-share(tick_stream, `tick_stream)
+try {
+    share(tick_stream, `tick_stream)
+    print("✓ 流表已成功共享: tick_stream")
+} catch(ex) {
+    print("共享流表失败: " + string(ex))
+    // 尝试使用不同的共享名
+    try {
+        share(tick_stream, `tick_stream_backup)
+        tick_stream_name = "tick_stream_backup"
+        print("✓ 流表已使用备用名称共享: tick_stream_backup")
+    } catch(ex2) {
+        print("备用共享也失败: " + string(ex2))
+        throw ex
+    }
+}
 
 // 方案B：如果需要流表持久化（重启后数据不丢失），请先确保：
 // - 在dolphindb.cfg中配置了 persistenceDir=/path/to/persistence
@@ -28,42 +87,55 @@ share(tick_stream, `tick_stream)
 
 // 5. 配置自动持久化到分区表
 def saveToPartitionedTable(mutable t) {
-    // 自动填充write_end_timestamp（如果未提供）
-    if(size(t) > 0) {
-        nullMask = isNull(t[`write_end_timestamp])
-        if(any(nullMask)) {
-            t[`write_end_timestamp][nullMask] = now(true)  // 纳秒精度当前时间
+    try {
+        // 调试信息
+        print("持久化函数被调用，接收到 " + string(size(t)) + " 行数据")
+
+        // 注意：write_end_timestamp 现在在写入流表时就已经设置好了，不需要再次填充
+
+        // 检查分区表是否存在
+        if(!existsTable("dfs://vnpy_futures", "tick_data")) {
+            print("错误：分区表 dfs://vnpy_futures.tick_data 不存在")
+            return
         }
+
+        // 写入到分区表
+        tick_table = loadTable("dfs://vnpy_futures", "tick_data")
+        tick_table.append!(t)
+        print("成功写入 " + string(size(t)) + " 行数据到分区表")
+
+    } catch(ex) {
+        print("持久化函数执行失败: " + string(ex))
     }
-    
-    // 写入到分区表
-    tick_table = loadTable("dfs://vnpy_futures", "tick_data")
-    tick_table.append!(t)
 }
 
 // 6. 先取消可能存在的旧订阅，避免重复订阅
 try {
-    unsubscribeTable(tableName=`tick_stream, actionName=`save_to_partitioned_table)
+    unsubscribeTable(tableName=tick_stream_name, actionName=`save_to_partitioned_table)
+    print("已取消旧的订阅")
 } catch(ex) {
-    // 忽略错误，可能没有订阅
+    print("取消订阅时出现错误（可能没有订阅）: " + string(ex))
 }
 
 // 7. 创建新订阅
+// 注意：降低batchSize和throttle以便更快持久化，便于测试
 subscribeTable(
-    tableName=`tick_stream, 
-    actionName=`save_to_partitioned_table, 
-    offset=-1, 
-    handler=saveToPartitionedTable, 
-    msgAsTable=true, 
-    batchSize=100, 
-    throttle=0.1
+    tableName=tick_stream_name,
+    actionName=`save_to_partitioned_table,
+    offset=-1,
+    handler=saveToPartitionedTable,
+    msgAsTable=true,
+    batchSize=10,   // 从100降低到10，更快触发持久化
+    throttle=0.05   // 从0.1降低到0.05，更短的节流时间
 )
+
+print("✓ 已创建订阅，流表名称: " + tick_stream_name)
 
 // 8. 验证流表创建成功
 getStreamingStat().table
 
 // 9. 输出创建成功信息
-print("✓ 流表创建成功: tick_stream")
+print("✓ 流表创建成功: " + tick_stream_name)
 print("✓ 流表已启用共享")
 print("✓ 已配置自动持久化到分区表")
 print("✓ 延迟分析字段已正确设置为NANOTIMESTAMP类型")
