@@ -56,28 +56,13 @@ colNames = `symbol`exchange`trade_date`datetime`name`last_price`open_price`high_
 // 注意：延迟分析字段应使用NANOTIMESTAMP（纳秒精度）
 colTypes = [STRING, STRING, DATE, TIMESTAMP, STRING, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE, STRING, NANOTIMESTAMP, NANOTIMESTAMP, NANOTIMESTAMP]
 
-// 3. 创建流表（预分配足够内存，100万行）
-// 注意：DolphinDB流表不支持默认值，write_end_timestamp由Python代码提供
-tick_stream = streamTable(1000000:0, colNames, colTypes)
-
-// 4. 启用流表共享
-// 注意：确保变量名没有冲突
-tick_stream_name = "tick_stream"  // 默认流表名
+// 在任何使用 tick_stream_name 之前，必须先初始化
+tick_stream_name = "tick_stream"  // 默认值
 
 try {
-    share(tick_stream, `tick_stream)
-    print("✓ 流表已成功共享: tick_stream")
+    share(table=streamTable(1000000:0, colNames, colTypes), sharedName=tick_stream_name)
 } catch(ex) {
     print("共享流表失败: " + string(ex))
-    // 尝试使用不同的共享名
-    try {
-        share(tick_stream, `tick_stream_backup)
-        tick_stream_name = "tick_stream_backup"
-        print("✓ 流表已使用备用名称共享: tick_stream_backup")
-    } catch(ex2) {
-        print("备用共享也失败: " + string(ex2))
-        throw ex
-    }
 }
 
 // 方案B：如果需要流表持久化（重启后数据不丢失），请先确保：
