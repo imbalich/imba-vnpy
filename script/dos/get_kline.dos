@@ -1,0 +1,45 @@
+// ============================================
+// DolphinDB K线聚合功能
+// 在保留现有持久化订阅的同时，添加K线聚合订阅
+// ============================================
+
+print("开始配置K线聚合功能...")
+print("注意：这将在现有的持久化订阅基础上，额外添加K线聚合功能")
+
+// 注意：时间列类型必须与 tick_stream 的 datetime 列一致（TIMESTAMP类型）
+share (table=streamTable(1000:0, `datetime`symbol`open`high`low`close`volume,[TIMESTAMP,SYMBOL,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG]), sharedName="OHLC")
+print("✓ 已创建OHLC输出表")
+
+// 清理可能存在的旧对象
+print("正在清理旧的K线聚合相关对象...")
+
+try {
+    dropStreamEngine("tsAggr")
+    print("✓ 已清理旧的聚合器: tsAggr")
+} catch(ex) {
+    print("清理聚合器时出错（可能不存在）: " + string(ex))
+}
+
+try {
+    undef(`OHLC)
+    print("✓ 已清理旧的OHLC表")
+} catch(ex) {
+    print("清理OHLC表时出错（可能不存在）: " + string(ex))
+}
+
+// 注意：保留现有的持久化订阅，只清理K线相关的订阅
+try {
+    unsubscribeTable(tableName=`tick_stream, actionName="act_tsAggr")
+    print("✓ 已清理旧的K线聚合订阅")
+} catch(ex) {
+    print("清理K线订阅时出错（可能不存在）: " + string(ex))
+}
+
+// 注意：字段名必须与tick_stream表的字段匹配
+// tick_stream表有: last_price, volume, datetime, symbol 等字段
+tsAggr = createTimeSeriesAggregator(name="tsAggr",windowSize=60*1000,step=60*1000,metrics=<[first(last_price),max(last_price),min(last_price),last(last_price),sum(volume)]>,dummyTable=tick_stream,outputTable=OHLC,timeColumn=`datetime,keyColumn=`symbol)
+
+// 注意：tableName应该是符号类型
+subscribeTable(tableName=`tick_stream, actionName="act_tsAggr", offset=0, handler=append!{tsAggr}, msgAsTable=true);
+
+print("✓ 已创建K线聚合订阅")
