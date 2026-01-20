@@ -7,7 +7,8 @@ print("开始配置K线聚合功能...")
 print("注意：这将在现有的持久化订阅基础上，额外添加K线聚合功能")
 
 // 注意：时间列类型必须与 tick_stream 的 datetime 列一致（TIMESTAMP类型）
-share (table=streamTable(1000:0, `datetime`symbol`open`high`low`close`volume,[TIMESTAMP,SYMBOL,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG]), sharedName="OHLC")
+// share (table=streamTable(1000:0, `datetime`symbol`open`high`low`close`volume,[TIMESTAMP,SYMBOL,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG]), sharedName="OHLC")
+share streamTable(1000:0, `datetime`symbol`open`high`low`close`volume,[TIMESTAMP,SYMBOL,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG]) as OHLC
 print("✓ 已创建OHLC输出表")
 
 // 清理可能存在的旧对象
