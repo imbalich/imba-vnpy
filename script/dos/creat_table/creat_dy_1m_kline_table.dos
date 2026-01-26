@@ -1,0 +1,33 @@
+print("开始配置动态K线聚合功能...")
+print("注意：这将在现有的持久化订阅基础上，额外添加动态K线聚合功能")
+
+share keyedTable(`datetime`Symbol,100:0, `datetime`symbol`open`high`low`close`volume,[TIMESTAMP,SYMBOL,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG]) as DY_OHLC
+print("✓ 已创建DY_OHLC输出表")
+
+try {
+    dropStreamEngine("dy_tsAggr")
+    print("✓ 已清理旧的聚合器: dy_tsAggr")
+} catch(ex) {
+    print("清理聚合器时出错（可能不存在）: " + string(ex))
+}
+
+try {
+    undef(`DY_OHLC)
+    print("✓ 已清理旧的DY_OHLC表")
+} catch(ex) {
+    print("清理DY_OHLC表时出错（可能不存在）: " + string(ex))
+}
+
+// 注意：保留现有的持久化订阅，只清理K线相关的订阅
+try {
+    unsubscribeTable(tableName=`tick_stream, actionName="act_dy_tsAggr")
+    print("✓ 已清理旧的K线聚合订阅")
+} catch(ex) {
+    print("清理K线订阅时出错（可能不存在）: " + string(ex))
+}
+
+dy_tsAggr = createTimeSeriesAggregator(name="dy_tsAggr", windowSize=60, step=60, metrics=<[first(last_price),max(last_price),min(last_price),last(last_price),sum(volume)]>, dummyTable=tick_stream, outputTable=DY_OHLC, timeColumn=`datetime, keyColumn=`symbol, updateTime=1, useWindowStartTime=true)
+
+subscribeTable(tableName=`tick_stream, actionName="act_dy_tsAggr", offset=0, handler=append!{dy_tsAggr}, msgAsTable=true);
+
+print("✓ 已创建动态K线聚合订阅")

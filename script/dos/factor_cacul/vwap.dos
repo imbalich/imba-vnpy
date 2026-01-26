@@ -1,0 +1,4 @@
+//基于快照因子的分钟聚合OHLC，vwap
+tick_aggr = select first(last_price) as open, max(last_price) as high, min(last_price) as low, last(last_price) as close, sum(volume) as vol,sum(last_price*volume) as val,wavg(last_price, volume) as vwap from tick_stream where date(datetime) <= 2026.01.27 and date(datetime) >= 2026.01.25 group by symbol, bar(datetime,1m) 
+
+print(tick_aggr)

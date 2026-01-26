@@ -1,0 +1,12 @@
+@state
+def flow(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1){
+        bid_volume_1_ma = round(mavg(bid_volume_1, 5*60), 5)
+        ask_volume_1_ma = round(mavg(ask_volume_1, 5*60), 5)
+        buy_prop = iif(abs(bid_volume_1_ma+ask_volume_1_ma) < 0, 0.5 , bid_volume_1_ma/ (bid_volume_1_ma+ask_volume_1_ma))
+        spd = ask_price_1 - bid_price_1
+        spd = iif(spd < 0, 0, spd)
+        spd_ma = round(mavg(spd, 5*60), 5)
+        return iif(spd_ma == 0, 0, buy_prop / spd_ma)
+}
+
+res_flow = select datetime, symbol, `flow as factorname, flow(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1) as val from tick_stream where date(datetime) <= 2026.01.27 and date(datetime) >= 2026.01.25 context by symbol
