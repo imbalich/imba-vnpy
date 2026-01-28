@@ -44,3 +44,60 @@ tsAggr = createTimeSeriesAggregator(name="tsAggr",windowSize=60*1000,step=60*100
 subscribeTable(tableName=`tick_stream, actionName="act_tsAggr", offset=0, handler=append!{tsAggr}, msgAsTable=true);
 
 print("✓ 已创建K线聚合订阅")
+
+// ============================================
+// 配置K线数据持久化到分区表
+// ============================================
+print("\n开始配置K线数据持久化功能...")
+
+// 清理可能存在的旧订阅
+try {
+    unsubscribeTable(tableName=`OHLC, actionName=`save_kline_to_partitioned_table)
+    print("✓ 已清理旧的K线持久化订阅")
+} catch(ex) {
+    print("清理K线持久化订阅时出错（可能不存在）: " + string(ex))
+}
+
+// 定义保存K线数据到分区表的函数
+def saveKlineToPartitionedTable(mutable t) {
+    try {
+        // 检查分区表是否存在
+        if(!existsTable("dfs://futures_k_minute_level", "k_minute_level")) {
+            print("错误：分区表 dfs://futures_k_minute_level.k_minute_level 不存在")
+            print("  请先执行 creat_kline_table.dos 创建K线分区表")
+            return
+        }
+
+        // 加载分区表
+        kline_table = loadTable("dfs://futures_k_minute_level", "k_minute_level")
+        
+        // 写入数据（字段顺序：symbol, datetime, open, high, low, close, volume）
+        // OHLC流表的字段顺序是：datetime, symbol, open, high, low, close, volume
+        // 需要调整字段顺序以匹配分区表结构
+        kline_table.append!(select symbol, datetime, open, high, low, close, volume from t)
+        
+        // 可选：打印写入信息（高频场景下建议注释掉以减少输出）
+        // print("成功写入 " + string(size(t)) + " 条K线数据到分区表")
+
+    } catch(ex) {
+        print("持久化K线数据失败: " + string(ex))
+        // 打印详细错误信息用于调试
+        // print("错误详情: " + string(ex))
+    }
+}
+
+// 订阅OHLC流表，将数据写入持久化表
+subscribeTable(
+    tableName=`OHLC,
+    actionName=`save_kline_to_partitioned_table,
+    offset=-1,  // -1表示从最新数据开始订阅
+    handler=saveKlineToPartitionedTable,
+    msgAsTable=true,
+    batchSize=10,    // 批量大小：每10条K线数据触发一次写入
+    throttle=0.1     // 节流时间：0.1秒
+)
+
+print("✓ 已创建K线数据持久化订阅")
+print("✓ OHLC流表数据将自动写入: dfs://futures_k_minute_level.k_minute_level")
+print("✓ 批量大小: 10条")
+print("✓ 节流时间: 0.1秒")

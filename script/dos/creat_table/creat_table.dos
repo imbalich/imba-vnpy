@@ -4,11 +4,9 @@
 // 引擎：TSDB（时序数据库）
 // ============================================
 
-// drop table [if exists] schema
-
 // 1. 删除已存在的数据库（如果存在）
-if(existsDatabase("dfs://vnpy_futures")) {
-    dropDatabase("dfs://vnpy_futures")
+if(existsDatabase("dfs://futures_snapshot")) {
+    dropDatabase("dfs://futures_snapshot")
 }
 
 // 2. 创建数据库（两层分区）
@@ -18,7 +16,7 @@ dbDate = database("", VALUE, 2026.01.01..2026.03.01)  // 按天分区
 dbSymbol = database("", HASH, [SYMBOL, 10])            // 按期货代码HASH10分区
 
 // 组合分区数据库（TSDB引擎）
-db = database("dfs://vnpy_futures", COMPO, [dbDate, dbSymbol], engine="TSDB")
+db = database("dfs://futures_snapshot", COMPO, [dbDate, dbSymbol], engine="TSDB")
 
 // 3. 定义表结构（期货快照数据 - 仅保留1档数据 + 延迟分析字段）
 // 按照官方示例：使用 table(1:0, colNames, colTypes) 创建空表结构

@@ -1,0 +1,21 @@
+// 1. 删除已存在的数据库（如果存在）
+if(existsDatabase("dfs://futures_k_minute_level")) {
+    dropDatabase("dfs://futures_k_minute_level")
+}
+
+create database "dfs://futures_k_minute_level"
+partitioned by VALUE(2026.01.01..2026.03.01)
+engine = "OLAP"
+
+create table "dfs://futures_k_minute_level"."k_minute_level" (
+    symbol SYMBOL,
+    datetime TIMESTAMP,
+    open DOUBLE,
+    high DOUBLE,
+    low DOUBLE,
+    close DOUBLE,
+    volume LONG
+)
+partitioned by datetime
+
+print("✓ kline表创建成功: k_minute_level")
