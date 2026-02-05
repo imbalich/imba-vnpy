@@ -123,4 +123,3 @@ getStreamingStat().table
 print("✓ 流表创建成功: " + tick_stream_name)
 print("✓ 流表已启用共享")
 print("✓ 已配置自动持久化到分区表")
-print("✓ 延迟分析字段已正确设置为NANOTIMESTAMP类型")

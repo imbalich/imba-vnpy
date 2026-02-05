@@ -1,0 +1,124 @@
+// ============================================
+// 因子2：买方流动性压力因子 (Buy Liquidity Pressure)
+// 订阅 tick_stream 流表，实时计算因子
+// 使用 5 分钟滚动窗口计算移动平均
+// 
+// 计算逻辑：
+//   1. buy_prop = 买一量MA / (买一量MA + 卖一量MA)  买方力量占比
+//   2. spd_ma = mavg(卖一价 - 买一价)              平均价差（流动性指标）
+//   3. 因子值 = buy_prop / spd_ma                  单位流动性成本下的买方压力
+// 
+// 含义：因子值越高，表示买方力量强且流动性好，潜在看涨信号
+// ============================================
+
+// 1. 因子计算函数（有状态，使用 @state 装饰器）
+@state
+def buyLiquidityPressure(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1){
+        bid_volume_1_ma = round(mavg(bid_volume_1, 5*60), 5)
+        ask_volume_1_ma = round(mavg(ask_volume_1, 5*60), 5)
+        buy_prop = iif(abs(bid_volume_1_ma+ask_volume_1_ma) < 0, 0.5 , bid_volume_1_ma/ (bid_volume_1_ma+ask_volume_1_ma))
+        spd_raw = ask_price_1 - bid_price_1
+        spd = iif(spd_raw < 0, 0, spd_raw)
+        spd_ma = round(mavg(spd, 5*60), 5)
+        return iif(spd_ma == 0, 0, buy_prop / spd_ma)
+}
+
+// 2. 清理旧的流计算引擎和订阅
+def cleanBuyLiquidityPressureEngine(){
+    // 取消订阅
+    try{
+        unsubscribeTable(tableName="tick_stream", actionName=`calc_buyLiquidityPressure)
+        print("已取消旧订阅")
+    }catch(ex){}
+    
+    // 删除引擎
+    try{
+        dropStreamEngine("buyLiquidityPressureEngine")
+        print("已删除旧引擎")
+    }catch(ex){}
+    
+    // 清理共享表
+    try{
+        undef(`factor_buyLiquidityPressure_result, SHARED)
+        print("已清理共享表")
+    }catch(ex){}
+}
+
+// 3. 创建因子结果表并共享
+def createBuyLiquidityPressureResultTable(){
+    t = table(100000:0, `symbol`datetime`factorValue, [SYMBOL, TIMESTAMP, DOUBLE])
+    share(t, `factor_buyLiquidityPressure_result)
+    return objByName(`factor_buyLiquidityPressure_result)
+}
+
+// 4. 创建流计算引擎（有状态引擎）
+def createBuyLiquidityPressureEngine(outputTable){
+    // 输入表结构（flow 因子需要 4 个字段）
+    inputSchema = table(1:0, 
+        `symbol`datetime`bid_volume_1`ask_volume_1`ask_price_1`bid_price_1, 
+        [SYMBOL, TIMESTAMP, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+    )
+    
+    // 定义计算指标：输出 datetime 和 因子值
+    // 注意：有状态因子会自动维护每个 symbol 的历史状态
+    metrics = <[datetime, buyLiquidityPressure(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1)]>
+    
+    // 创建响应式状态引擎
+    // keyColumn="symbol" 表示按品种分别维护状态
+    engine = createReactiveStateEngine(
+        name="buyLiquidityPressureEngine",
+        metrics=metrics,
+        dummyTable=inputSchema,
+        outputTable=outputTable,
+        keyColumn="symbol"
+    )
+    return engine
+}
+
+// 5. 订阅流表
+def subscribeTickStreamForBuyLiquidityPressure(){
+    subscribeTable(
+        tableName="tick_stream",
+        actionName=`calc_buyLiquidityPressure,
+        offset=-1,
+        handler=getStreamEngine("buyLiquidityPressureEngine"),
+        msgAsTable=true,
+        batchSize=10,
+        throttle=0.05
+    )
+    print("已订阅 tick_stream，实时计算买方流动性压力因子")
+}
+// 6. 启动因子计算（主函数）
+def startBuyLiquidityPressureFactor(){
+    print("启动买方流动性压力因子计算...")
+
+    // 清理旧资源
+    cleanBuyLiquidityPressureEngine()
+    
+    // 创建输出表
+    resultTable = createBuyLiquidityPressureResultTable()
+    print("✓ 因子结果表已创建: factor_buyLiquidityPressure_result")
+    
+    // 创建引擎
+    createBuyLiquidityPressureEngine(resultTable)
+    print("✓ 流计算引擎已创建: buyLiquidityPressureEngine")
+    
+    // 订阅流表
+    subscribeTickStreamForBuyLiquidityPressure()
+    print("✓ 已订阅流表: tick_stream")
+    
+    print("买方流动性压力因子计算已启动！")
+    print("注意：需要积累约 300 条数据后才有有效输出")
+    print("查看结果: select * from factor_buyLiquidityPressure_result")
+}
+
+// 7. 停止因子计算
+def stopBuyLiquidityPressureFactor(){
+    cleanBuyLiquidityPressureEngine()
+    print("买方流动性压力因子计算已停止")
+}
+
+// ============================================
+// 执行：启动因子计算
+// ============================================
+startBuyLiquidityPressureFactor()

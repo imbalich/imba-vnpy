@@ -30,9 +30,5 @@ t = table(1:0, colNames, colTypes)
 tick_table = db.createPartitionedTable(t, `tick_data, `trade_date`symbol, sortColumns=`symbol`datetime, keepDuplicates=ALL)
 
 // 5. 输出创建成功信息
-print("✓ 数据库创建成功: dfs://vnpy_futures")
+print("✓ 数据库创建成功: dfs://futures_snapshot")
 print("✓ 表创建成功: tick_data")
-print("✓ 分区策略: 按天分区 + 按期货代码HASH10分区")
-print("✓ 引擎: TSDB")
-print("✓ 分区键: trade_date + symbol")
-print("✓ 排序键: symbol + datetime")

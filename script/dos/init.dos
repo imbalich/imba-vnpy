@@ -1,0 +1,18 @@
+// 1.创建数据库和持久化表
+// 1.1 创建快照持久化表
+#include "./creat_table/creat_table.dos"
+// 1.2 创建K线持久化表
+#include "./creat_table/creat_kline_table.dos"
+// 1.3 创建因子持久化表
+// 暂未开发
+
+// 2.创建流表
+// 2.1 创建快照流表
+#include "./creat_table/creat_stream_table.dos"
+
+// 3.创建因子计算引擎
+#include "./factors/factor1.dos"
+#include "./factors/factor2.dos"
+
+// 清理临时变量
+undef all
