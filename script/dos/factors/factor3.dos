@@ -1,0 +1,139 @@
+// ============================================
+// 因子3：因子1和因子2合成因子
+// 订阅 tick_stream 流表，实时计算因子
+// ============================================
+
+def imbalance(bid_volume_1, ask_volume_1){
+    return iif(bid_volume_1 + ask_volume_1 == 0, 0, (bid_volume_1 - ask_volume_1) / (bid_volume_1 + ask_volume_1))
+}
+
+@state
+def combineFactor(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1){
+    factor1 = imbalance(bid_volume_1, ask_volume_1)
+
+    bid_volume_1_ma = round(mavg(bid_volume_1, 60), 5)
+    ask_volume_1_ma = round(mavg(ask_volume_1, 60), 5)
+    buy_prop = iif(abs(bid_volume_1_ma+ask_volume_1_ma) < 0, 0.5 , bid_volume_1_ma/ (bid_volume_1_ma+ask_volume_1_ma))
+    spd_raw = ask_price_1 - bid_price_1
+    spd = iif(spd_raw < 0, 0, spd_raw)
+    spd_ma = round(mavg(spd, 60), 5)
+
+    factor2 = iif(spd_ma == 0, 0, buy_prop / spd_ma)
+
+    imb_norm = (factor1 + 1) / 2
+    blp_norm = min(factor2, 1)
+
+    combined_score = 0.4 * imb_norm + 0.6 * blp_norm
+
+    return combined_score
+}
+
+// 2. 清理旧的流计算引擎和订阅
+def cleanCombineFactorEngine(){
+    // 取消订阅
+    try{
+        unsubscribeTable(tableName="tick_stream", actionName=`calc_combineFactor)
+    }catch(ex){}
+    // 取消 Python 端可能的订阅
+    try{
+        unsubscribeTable(tableName="factor_combine_result", actionName=`python_factor_subscriber)
+    }catch(ex){}
+    // 删除引擎
+    try{
+        dropStreamEngine("combineFactorEngine")
+    }catch(ex){}
+    // 清理流表
+    try{
+        undef(`factor_combine_result, SHARED)
+        dropStreamTable(`factor_combine_result)
+    }catch(ex){}
+    print("已清理旧资源")
+}
+
+// 3. 创建因子结果流表并共享
+def createCombineFactorResultTable(){
+    // 注意：symbol 类型与 tick_stream 保持一致，使用 STRING
+    t = streamTable(100000:0, `symbol`datetime`factorValue, [STRING, TIMESTAMP, DOUBLE])
+    share(t, `factor_combine_result)
+    return objByName(`factor_combine_result)
+}
+
+// 4. 创建流计算引擎（有状态引擎）
+def createCombineFactorEngine(outputTable){
+    // 输入表结构（需要 4 个字段）
+    // 注意：symbol 类型必须与 tick_stream 一致，使用 STRING
+    inputSchema = table(1:0, 
+        `symbol`datetime`bid_volume_1`ask_volume_1`ask_price_1`bid_price_1, 
+        [STRING, TIMESTAMP, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+    )
+    
+    // 定义计算指标：输出 datetime 和 因子值
+    metrics = <[datetime, combineFactor(bid_volume_1, ask_volume_1, ask_price_1, bid_price_1)]>
+    
+    // 创建响应式状态引擎
+    engine = createReactiveStateEngine(
+        name="combineFactorEngine",
+        metrics=metrics,
+        dummyTable=inputSchema,
+        outputTable=outputTable,
+        keyColumn="symbol"
+    )
+    return engine
+}
+
+// 5. 订阅流表
+// 包装函数：筛选需要的列后再传给引擎
+def combineFactorHandler(mutable msg){
+    engine = getStreamEngine("combineFactorEngine")
+    // 只选择引擎需要的列
+    selectedData = select symbol, datetime, bid_volume_1, ask_volume_1, ask_price_1, bid_price_1 from msg
+    engine.append!(selectedData)
+}
+
+def subscribeTickStreamForCombineFactor(){
+    subscribeTable(
+        tableName="tick_stream",
+        actionName=`calc_combineFactor,
+        offset=-1,
+        handler=combineFactorHandler,
+        msgAsTable=true,
+        batchSize=10,
+        throttle=0.05
+    )
+    print("已订阅 tick_stream，实时计算组合因子")
+}
+
+// 6. 启动因子计算（主函数）
+def startCombineFactor(){
+    print("启动组合因子计算...")
+
+    // 清理旧资源
+    cleanCombineFactorEngine()
+    
+    // 创建输出表
+    resultTable = createCombineFactorResultTable()
+    print("✓ 因子结果表已创建: factor_combine_result")
+    
+    // 创建引擎
+    createCombineFactorEngine(resultTable)
+    print("✓ 流计算引擎已创建: combineFactorEngine")
+    
+    // 订阅流表
+    subscribeTickStreamForCombineFactor()
+    print("✓ 已订阅流表: tick_stream")
+    
+    print("组合因子计算已启动！")
+    print("注意：需要积累约 60 条数据后才有有效输出")
+    print("查看结果: select * from factor_combine_result")
+}
+
+// 7. 停止因子计算
+def stopCombineFactor(){
+    cleanCombineFactorEngine()
+    print("组合因子计算已停止")
+}
+
+// ============================================
+// 执行：启动因子计算
+// ============================================
+startCombineFactor()

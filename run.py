@@ -1,11 +1,12 @@
 from vnpy.event import EventEngine
 from vnpy.trader.engine import MainEngine
 from vnpy.trader.ui import MainWindow, create_qapp
-
-from myvnpy.gateway.ctp.ctp_gateway import FixedCtpGateway
 from vnpy.app.cta_strategy import CtaStrategyApp
 from vnpy.app.cta_backtester import CtaBacktesterApp
+from vnpy.trader.constant import Exchange
 
+from myvnpy.gateway.ctp.ctp_gateway import FixedCtpGateway
+from myvnpy.app.signal_executor import SignalExecutorEngine
 # 导入数据记录模块的所有组件
 from myvnpy.app.data_recorder import (
     DolphinDBSession,
@@ -14,7 +15,6 @@ from myvnpy.app.data_recorder import (
     TickCollectorEngine,
     FilterConfig
 )
-from vnpy.trader.constant import Exchange
 
 
 def main():
@@ -90,12 +90,44 @@ def main():
     main_engine.engines[collector_engine.engine_name] = collector_engine
     
     # ============================================
+    # 信号执行模块初始化
+    # ============================================
+    
+    signal_executor = None
+    try:
+        signal_executor = SignalExecutorEngine(
+            main_engine=main_engine,
+            event_engine=event_engine,
+            gateway_name="CTP",        # 使用的网关名称
+            mq_host="localhost",       # RabbitMQ 地址
+            mq_port=5672,              # RabbitMQ 端口
+            mq_user="guest",           # RabbitMQ 用户名
+            mq_password="guest"        # RabbitMQ 密码
+        )
+        
+        # 注册引擎到 main_engine
+        main_engine.engines[signal_executor.engine_name] = signal_executor
+        
+        # 启动信号执行引擎（开始监听MQ消息）
+        signal_executor.start()
+        print("✓ 信号执行引擎已启动，正在监听交易信号...")
+        
+    except Exception as e:
+        print(f"✗ 信号执行引擎初始化失败: {e}")
+        print("  请确保 RabbitMQ 服务已启动")
+        signal_executor = None
+    # ============================================
     # 启动主窗口
     # ============================================
     main_window = MainWindow(main_engine, event_engine)
     main_window.showMaximized()
 
     qapp.exec()
+    
+    # 程序退出时，停止信号执行引擎
+    if signal_executor:
+        signal_executor.stop()
+        print("✓ 信号执行引擎已停止")
     
     # 程序退出时，可以打印统计信息（可选）
     if collector_engine:

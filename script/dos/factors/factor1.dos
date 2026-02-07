@@ -13,25 +13,27 @@ def cleanImbalanceEngine(){
     // 取消订阅
     try{
         unsubscribeTable(tableName="tick_stream", actionName=`calc_imbalance)
-        print("已取消旧订阅")
     }catch(ex){}
-    
+    // 取消 Python 端可能的订阅
+    try{
+        unsubscribeTable(tableName="factor_imbalance_result", actionName=`python_factor_subscriber)
+    }catch(ex){}
     // 删除引擎
     try{
         dropStreamEngine("imbalanceEngine")
-        print("已删除旧引擎")
     }catch(ex){}
-    
-    // 清理共享表
+    // 清理流表
     try{
         undef(`factor_imbalance_result, SHARED)
-        print("已清理共享表")
+        dropStreamTable(`factor_imbalance_result)
     }catch(ex){}
+    print("已清理旧资源")
 }
 
-// 3. 创建因子结果表并共享
+// 3. 创建因子结果流表并共享
 def createFactorResultTable(){
-    t = table(100000:0, `symbol`datetime`factorValue, [SYMBOL, TIMESTAMP, DOUBLE])
+    // 注意：symbol 类型与 tick_stream 保持一致，使用 STRING
+    t = streamTable(100000:0, `symbol`datetime`factorValue, [STRING, TIMESTAMP, DOUBLE])
     share(t, `factor_imbalance_result)
     return objByName(`factor_imbalance_result)
 }
@@ -39,7 +41,8 @@ def createFactorResultTable(){
 // 4. 创建流计算引擎
 def createImbalanceEngine(outputTable){
     // 输入表结构（只需要计算所需的列）
-    inputSchema = table(1:0, `symbol`datetime`bid_volume_1`ask_volume_1, [SYMBOL, TIMESTAMP, DOUBLE, DOUBLE])
+    // 注意：symbol 类型必须与 tick_stream 一致，使用 STRING
+    inputSchema = table(1:0, `symbol`datetime`bid_volume_1`ask_volume_1, [STRING, TIMESTAMP, DOUBLE, DOUBLE])
     
     // 定义计算指标：输出 datetime 和 因子值
     metrics = <[datetime, imbalance(bid_volume_1, ask_volume_1)]>
@@ -56,12 +59,20 @@ def createImbalanceEngine(outputTable){
 }
 
 // 5. 订阅流表
+// 包装函数：筛选需要的列后再传给引擎
+def imbalanceHandler(mutable msg){
+    engine = getStreamEngine("imbalanceEngine")
+    // 只选择引擎需要的列
+    selectedData = select symbol, datetime, bid_volume_1, ask_volume_1 from msg
+    engine.append!(selectedData)
+}
+
 def subscribeTickStream(){
     subscribeTable(
         tableName="tick_stream",
         actionName=`calc_imbalance,
         offset=-1,
-        handler=getStreamEngine("imbalanceEngine"),
+        handler=imbalanceHandler,
         msgAsTable=true,
         batchSize=10,
         throttle=0.05

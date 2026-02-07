@@ -78,14 +78,14 @@ def saveToPartitionedTable(mutable t) {
 
         // 注意：write_end_timestamp 现在在写入流表时就已经设置好了，不需要再次填充
 
-        // 检查分区表是否存在
-        if(!existsTable("dfs://vnpy_futures", "tick_data")) {
-            print("错误：分区表 dfs://vnpy_futures.tick_data 不存在")
+        // 检查分区表是否存在（修正：使用正确的数据库路径）
+        if(!existsTable("dfs://futures_snapshot", "tick_data")) {
+            print("错误：分区表 dfs://futures_snapshot.tick_data 不存在")
             return
         }
 
-        // 写入到分区表
-        tick_table = loadTable("dfs://vnpy_futures", "tick_data")
+        // 写入到分区表（修正：使用正确的数据库路径）
+        tick_table = loadTable("dfs://futures_snapshot", "tick_data")
         tick_table.append!(t)
         print("成功写入 " + string(size(t)) + " 行数据到分区表")
 

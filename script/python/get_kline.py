@@ -1,7 +1,5 @@
 from threading import Event
 import dolphindb as ddb
-import pandas as pd
-import numpy as np
 s=ddb.session()
 #设定本地端口20001用于订阅流数据
 s.enableStreaming(20001)

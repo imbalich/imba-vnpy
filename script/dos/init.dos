@@ -13,6 +13,7 @@
 // 3.创建因子计算引擎
 #include "./factors/factor1.dos"
 #include "./factors/factor2.dos"
+#include "./factors/factor3.dos"
 
 // 清理临时变量
 undef all

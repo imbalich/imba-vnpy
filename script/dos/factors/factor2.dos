@@ -28,25 +28,27 @@ def cleanBuyLiquidityPressureEngine(){
     // 取消订阅
     try{
         unsubscribeTable(tableName="tick_stream", actionName=`calc_buyLiquidityPressure)
-        print("已取消旧订阅")
     }catch(ex){}
-    
+    // 取消 Python 端可能的订阅
+    try{
+        unsubscribeTable(tableName="factor_buyLiquidityPressure_result", actionName=`python_factor_subscriber)
+    }catch(ex){}
     // 删除引擎
     try{
         dropStreamEngine("buyLiquidityPressureEngine")
-        print("已删除旧引擎")
     }catch(ex){}
-    
-    // 清理共享表
+    // 清理流表
     try{
         undef(`factor_buyLiquidityPressure_result, SHARED)
-        print("已清理共享表")
+        dropStreamTable(`factor_buyLiquidityPressure_result)
     }catch(ex){}
+    print("已清理旧资源")
 }
 
-// 3. 创建因子结果表并共享
+// 3. 创建因子结果流表并共享
 def createBuyLiquidityPressureResultTable(){
-    t = table(100000:0, `symbol`datetime`factorValue, [SYMBOL, TIMESTAMP, DOUBLE])
+    // 注意：symbol 类型与 tick_stream 保持一致，使用 STRING
+    t = streamTable(100000:0, `symbol`datetime`factorValue, [STRING, TIMESTAMP, DOUBLE])
     share(t, `factor_buyLiquidityPressure_result)
     return objByName(`factor_buyLiquidityPressure_result)
 }
@@ -54,9 +56,10 @@ def createBuyLiquidityPressureResultTable(){
 // 4. 创建流计算引擎（有状态引擎）
 def createBuyLiquidityPressureEngine(outputTable){
     // 输入表结构（flow 因子需要 4 个字段）
+    // 注意：symbol 类型必须与 tick_stream 一致，使用 STRING
     inputSchema = table(1:0, 
         `symbol`datetime`bid_volume_1`ask_volume_1`ask_price_1`bid_price_1, 
-        [SYMBOL, TIMESTAMP, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+        [STRING, TIMESTAMP, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
     )
     
     // 定义计算指标：输出 datetime 和 因子值
@@ -76,12 +79,20 @@ def createBuyLiquidityPressureEngine(outputTable){
 }
 
 // 5. 订阅流表
+// 包装函数：筛选需要的列后再传给引擎
+def buyLiquidityPressureHandler(mutable msg){
+    engine = getStreamEngine("buyLiquidityPressureEngine")
+    // 只选择引擎需要的列
+    selectedData = select symbol, datetime, bid_volume_1, ask_volume_1, ask_price_1, bid_price_1 from msg
+    engine.append!(selectedData)
+}
+
 def subscribeTickStreamForBuyLiquidityPressure(){
     subscribeTable(
         tableName="tick_stream",
         actionName=`calc_buyLiquidityPressure,
         offset=-1,
-        handler=getStreamEngine("buyLiquidityPressureEngine"),
+        handler=buyLiquidityPressureHandler,
         msgAsTable=true,
         batchSize=10,
         throttle=0.05
